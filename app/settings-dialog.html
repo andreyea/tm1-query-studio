@@ -1,0 +1,34 @@
+<md-dialog aria-label="Settings">
+    <form ng-cloak>
+        <md-toolbar>
+            <div class="md-toolbar-tools">
+                <h2>Settings</h2>
+            </div>
+        </md-toolbar>
+
+        <md-dialog-content>
+            <div class="md-dialog-content">
+
+                <md-input-container class="md-block" flex-gt-sm>
+                    <label>IP or Server Name</label>
+                    <input ng-model="server">
+                </md-input-container>
+
+                <div ng-show="tm1Instances.length>0">
+                    <b> REST API:</b> <span ng-repeat="svr in tm1Instances" ng-show="svr.HTTPPortNumber>0">{{svr.Name}}; </span><br>
+                    <b>Others:</b> <span ng-repeat="svr in tm1Instances" ng-show="svr.HTTPPortNumber===0">{{svr.Name}}; </span>
+                </div>
+
+            </div>
+        </md-dialog-content>
+
+        <md-dialog-actions layout="row">
+            <md-button style="margin-left:0" class="md-raised md-primary" ng-click="findTm1(server)">Find TM1</md-button>
+            <span flex></span>
+
+            <md-button ng-click="closeDialog()">
+                Close
+            </md-button>
+        </md-dialog-actions>
+    </form>
+</md-dialog>

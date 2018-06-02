@@ -1,0 +1,192 @@
+<html>
+
+<head>
+
+    <script src="js/angular.min.js"></script>
+    <script src="js/jquery.min.js"></script>
+    <script src="js/angular-cookies.min.js"></script>
+    <script src="js/angular-animate.min.js"></script>
+    <script src="js/angular-aria.min.js"></script>
+    <script src="js/angular-messages.min.js"></script>
+    <script src="js/angular-material.min.js"></script>
+    <script src="js/xlsx.full.min.js"></script>
+    <script src="js/Blob.min.js"></script>
+    <script src="scripts/app.js"></script>
+    <script src="scripts/services.js"></script>
+    <script src="scripts/controllers.js"></script>
+    <script src="scripts/directives.js"></script>
+    <script src="js/ace.js"></script>
+    <script src="js/ext-language_tools.js"></script>
+    <script src="scripts/mdxMode.js"></script>
+
+
+
+    <link rel="stylesheet" href="css/angular-material.min.css">
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/bootstrap-theme.min.css">
+    <link rel="stylesheet" href="css/font-awesome.min.css">
+    <link rel="stylesheet" href="css/app.css">
+
+
+</head>
+
+<body ng-app="app">
+    <div class="" ng-controller="mainCtrl">
+
+
+        <!-- toolbar -->
+        <div class="toolbar">
+
+            <md-input-container>
+                <label>TM1</label>
+                <md-select ng-model="instanceToUse">
+
+                    <md-option ng-repeat="svr in tm1Instances" ng-value="svr" ng-disabled="svr.HTTPPortNumber=='0'">
+                        {{svr.Name}}
+                    </md-option>
+                </md-select>
+            </md-input-container>
+
+            <i title="Connect" class="fa fa-circle" ng-click="login()" style="color:{{instanceToUse.loggedIn?'green':'red'}}"></i>
+
+            <i ng-click="executeMdx()" title="Execute MDX" class="fa fa-play" style="color:green; cursor:pointer; margin-left:50px;"></i>
+
+        </div>
+
+
+        <div class="wrapper">
+            <div class="flex-container">
+                <!-- CUBE VIEW -->
+                <div ng-show="navOpen" class="nav">
+                    <ul style="padding-left:15px; list-style: none;">
+                        <li ng-hide="!controlObjects && cube.Name.substring(0,1)=='}'" ng-mousedown="setDragginObject(cube.Name)" drag-me="cube" draggable="true" style="white-space: pre-wrap;" ng-repeat-start="cube in cubes"><i class="fa" ng-class="!cube.expand?'fa-plus-square-o':'fa-minus-square-o'" ng-click="cube.expand=!cube.expand"></i> <i class="fa fa-cube" aria-hidden="true"></i> {{cube.Name}}</li>
+                        <li style="padding-left:10px;" ng-mousedown="setDragginObject(dim.Name)" drag-me="dimension" draggable="true" ng-show="cube.expand" ng-repeat-start="dim in cube.Dimensions">
+                            <i class="fa" ng-class="!dim.expandHierarchies?'fa-plus-square-o':'fa-minus-square-o'" ng-click="getHierarchies(dim); dim.expandHierarchies=!dim.expandHierarchies"></i> <i class="fa fa-arrows-alt" aria-hidden="true"></i> {{dim.Name}}</li>
+                        <li style="padding-left:20px;" ng-show="cube.expand && dim.expandHierarchies" ng-repeat-start="hierarchy in dim.hierarchies">
+                            <i class="fa" ng-class="!hierarchy.expandElements?'fa-plus-square-o':'fa-minus-square-o'" ng-click="getElements($parent.dim,hierarchy); hierarchy.expandElements=!hierarchy.expandElements"></i> <i class="fa fa-sitemap" aria-hidden="true"></i> {{hierarchy.Name}}
+                        </li>
+
+                        <li ng-if="cube.expand">
+                            <input ng-if="hierarchy.expandElements" class="form-control" placeholder="Search Elements" ng-model="hierarchy.elementFilter">
+                            <ul ng-if="hierarchy.expandElements && hierarchy.elementFilter && hierarchy.elementFilter!=''" style="padding-left:20px; list-style: none;">
+                                <li ng-mousedown="setDragginObject('['+hierarchy.Name+'].['+el.Name+']')" drag-me="element" draggable="true" ng-repeat="el in hierarchy.flatElements | filter:{Name:hierarchy.elementFilter}">{{el.Name}}</li>
+                            </ul>
+
+                            <elements-tree ng-if="hierarchy.expandElements && (!hierarchy.elementFilter || hierarchy.elementFilter=='')" top-func="setDragginObject" set-element-drag="setDragginObject(el)" ng-if="" listarray="hierarchy.elements"></elements-tree>
+                        </li>
+                        <li ng-show="false" ng-repeat-end></li>
+                        <li ng-show="false" ng-repeat-end></li>
+                        <li ng-show="false" ng-repeat-end></li>
+                    </ul>
+                </div>
+
+
+                <!--  main window -->
+
+                <div class="nested-flex">
+
+                    <div class="code-editor" ng-hide="editorHide">
+                        <div id="aceEditor" style="height: 200px; width: 100%"></div>
+                    </div>
+
+
+                    <!-- results -->
+                    <div class="results" ng-show="dimQueryResults">
+                        <div class="error-block" ng-show="executeMdxErr">
+                            <p><b>ERROR</b></p>
+                            <p>{{executeMdxErr.data.error.message}}</p>
+                        </div>
+                        <div class="info-block" ng-show="infoMessage">
+                            <p>You are trying to execute MDX against <b>{{dimToQuery}}</b> dimension. This dimension doesn't seem to have any attributes. Matching attributes cube is required. Would you like to create one (admin only)?</p>
+                            <md-button class="md-raised md-warn" ng-click="createAttrCube()">
+                                Create
+                            </md-button>
+                            <!-- <p ng-show="infoMessageCreationStatus">{{infoMessageCreationStatus}}</p> -->
+                        </div>
+                        <!-- <input ng-if="dimensionElementsResults.length>0" class="form-control" placeholder="Search Elements" ng-model="elementFilter"> -->
+                        <h4>Dimension: {{dimToQuery}}</h4>
+                        <ul style="list-style: none;">
+                            <li ng-repeat="el in dimensionElementsResults">{{el.Members[0].Name}}</li>
+                        </ul>
+                    </div>
+
+                    <div class="results" ng-show="cubeQueryResults">
+                        <div class="error-block" ng-show="executeMdxErr">
+                            <p><b>ERROR</b></p>
+                            <p>{{executeMdxErr.data.error.message}}</p>
+                        </div>
+                        <div class="timer">
+                            <span class="pull-right">
+                                <i class="fa fa-clock-o"></i>
+                                <span ng-show="timeToExecute<1000">
+                                    {{timeToExecute}} ms
+                                </span>
+                            <span ng-show="timeToExecute>=1000">
+                                    {{timeToExecute / 1000}} s
+                                </span>
+                            </span>
+                        </div>
+                        <div class="filters" ng-if="table.cellSetTable">
+                            <p ng-repeat="filter in table.dimensions.filters"><b>{{filter.dim}}:</b> {{filter.el}}</p>
+                            <ul style="padding:0">
+                                <li style="display:inline-block"><b>Rows:</b> </li>
+                                <li style="display:inline-block" ng-repeat="row in table.dimensions.rows">{{row.dim}}{{!$last?' | ':''}}</li>
+                                <li style="display:inline-block"><b>Columns: </b> </li>
+                                <li style="display:inline-block" ng-repeat="column in table.dimensions.columns">{{column.dim}}{{!$last?' | ':''}}</li>
+                            </ul>
+                        </div>
+
+
+                        <table class="table table-condensed">
+                            <thead>
+                                <tr ng-repeat="row in table.cellSetTableHeaders track by $index">
+                                    <th style="border-right: 2px solid #ddd;" class="text-center" colspan="{{header.span}}" ng-repeat="header in row track by $index">
+                                        {{header.name}}
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr ng-repeat="row in table.cellSetTable track by $index">
+                                    <th title="{{data.name===table.cellSetTableRowHeaders[$parent.$index-1][$index].name?'':data.name}}" style="border-right: 1px solid #ddd; white-space: nowrap; text-overflow:ellipsis; overflow: hidden; max-width:150px;" ng-repeat="data in table.cellSetTableRowHeaders[$index] track by $index">
+                                        {{data.name===table.cellSetTableRowHeaders[$parent.$index-1][$index].name?'':data.name}}
+                                    </th>
+                                    <td class="text-right" style="border-right: 1px solid #ddd;" ng-repeat="data in row track by $index">
+                                        {{data}}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+
+                    <div class="console" ng-show="showConsole">
+                        <div class="console-log">
+                            <ul style="list-style: none;">
+                                <li ng-repeat="log in TILogs">
+                                    <i style="color: {{log.success?'green':'red'}}" ng-class="log.success?'fa-check':'fa-times'" class="fa"></i>
+                                    {{log.function}}
+                                    <br>
+                                    <span ng-if="log.msg"><small><i>--{{log.msg}}</i></small></span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="input-box" >
+                            <input class="console-input" type="text" ng-keyup="consoleInput($event,tiCode);" ng-model="tiCode" autofocus="autofocus" />
+                            <span class="unit">></span>
+                        </div>
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+        </div>
+
+
+    </div>
+
+</body>
+
+</html>

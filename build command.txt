@@ -1,0 +1,1 @@
+electron-packager . TM1QueryStudio --overwrite --icon app.ico
